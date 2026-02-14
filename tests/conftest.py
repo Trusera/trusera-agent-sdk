@@ -1,7 +1,7 @@
 """Shared fixtures for tests."""
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 import httpx
 
 from trusera_sdk import TruseraClient
@@ -22,6 +22,24 @@ def mock_httpx_client(monkeypatch):
 
     # Patch httpx.Client constructor
     monkeypatch.setattr("httpx.Client", lambda **kwargs: mock_client)
+
+    # Also patch AsyncClient for async tests
+    mock_async_client = Mock(spec=httpx.AsyncClient)
+    mock_async_response = Mock()
+    mock_async_response.status_code = 200
+    mock_async_response.json.return_value = {"id": "agent_123"}
+    mock_async_response.raise_for_status = Mock()
+
+    async def mock_async_post(*args, **kwargs):
+        return mock_async_response
+
+    mock_async_client.post = mock_async_post
+    async def mock_aclose():
+        pass
+
+    mock_async_client.aclose = mock_aclose
+
+    monkeypatch.setattr("httpx.AsyncClient", lambda **kwargs: mock_async_client)
 
     return mock_client
 

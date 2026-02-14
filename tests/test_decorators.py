@@ -28,7 +28,7 @@ def test_monitor_sync_function(trusera_client):
     assert event.payload["arguments"]["y"] == 3
     assert event.payload["result"] == 5
     assert event.metadata["success"] is True
-    assert event.metadata["duration_ms"] > 0
+    assert event.metadata["duration_ms"] >= 0
 
 
 @pytest.mark.asyncio

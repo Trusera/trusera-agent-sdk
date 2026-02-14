@@ -1,10 +1,12 @@
 """Tests for TruseraClient."""
 
-import pytest
+import os
 import time
-from unittest.mock import Mock, call
 
-from trusera_sdk import TruseraClient, Event, EventType
+import pytest
+from unittest.mock import Mock
+
+from trusera_sdk import TruseraClient, AsyncTruseraClient, Event, EventType
 
 
 def test_client_initialization(mock_httpx_client):
@@ -27,6 +29,36 @@ def test_client_api_key_warning(mock_httpx_client, caplog):
     client = TruseraClient(api_key="invalid_key")
 
     assert "should start with 'tsk_'" in caplog.text
+
+    client.close()
+
+
+def test_client_requires_api_key(mock_httpx_client):
+    """Test that client raises ValueError when no API key is provided."""
+    with pytest.raises(ValueError, match="API key is required"):
+        TruseraClient()
+
+
+def test_client_env_var_fallback(mock_httpx_client, monkeypatch):
+    """Test TRUSERA_API_KEY and TRUSERA_API_URL env var fallback."""
+    monkeypatch.setenv("TRUSERA_API_KEY", "tsk_from_env")
+    monkeypatch.setenv("TRUSERA_API_URL", "https://custom.trusera.dev")
+
+    client = TruseraClient()
+
+    assert client.api_key == "tsk_from_env"
+    assert client.base_url == "https://custom.trusera.dev"
+
+    client.close()
+
+
+def test_client_explicit_key_overrides_env(mock_httpx_client, monkeypatch):
+    """Test that explicit api_key takes precedence over env var."""
+    monkeypatch.setenv("TRUSERA_API_KEY", "tsk_from_env")
+
+    client = TruseraClient(api_key="tsk_explicit")
+
+    assert client.api_key == "tsk_explicit"
 
     client.close()
 
@@ -115,21 +147,28 @@ def test_flush_events(trusera_client, mock_httpx_client):
     assert trusera_client._queue.qsize() == 0
 
 
-def test_flush_respects_batch_size(trusera_client, mock_httpx_client):
+def test_flush_respects_batch_size(mock_httpx_client):
     """Test that flush respects batch_size."""
-    # Track more events than batch_size
-    for i in range(10):
-        event = Event(
-            type=EventType.TOOL_CALL,
-            name=f"tool_{i}",
-        )
-        trusera_client.track(event)
+    # Use a longer flush_interval to prevent background thread interference
+    client = TruseraClient(
+        api_key="tsk_test_key",
+        flush_interval=60.0,
+        batch_size=5,
+    )
+    client.set_agent_id("agent_test_123")
 
-    # Flush (batch_size is 5)
-    trusera_client.flush()
+    # Track 10 events (2x batch_size) without triggering auto-flush
+    for i in range(10):
+        event = Event(type=EventType.TOOL_CALL, name=f"tool_{i}")
+        client._queue.put(event)  # Put directly to avoid auto-flush trigger
+
+    # Single flush should drain exactly batch_size
+    client.flush()
 
     # Should have sent 5 events, 5 remaining
-    assert trusera_client._queue.qsize() == 5
+    assert client._queue.qsize() == 5
+
+    client.close()
 
 
 def test_auto_flush_on_batch_size(trusera_client, mock_httpx_client):
@@ -205,3 +244,104 @@ def test_track_after_shutdown(trusera_client, caplog):
     trusera_client.track(event)
 
     assert "shutting down" in caplog.text.lower()
+
+
+def test_flush_retry_limit(mock_httpx_client):
+    """Test that flush drops events after max_retries."""
+    import httpx as _httpx
+
+    mock_httpx_client.post.side_effect = _httpx.ConnectError("connection failed")
+
+    client = TruseraClient(
+        api_key="tsk_test_key",
+        flush_interval=60.0,
+        batch_size=100,
+        max_retries=2,
+    )
+    client.set_agent_id("agent_test")
+
+    event = Event(type=EventType.TOOL_CALL, name="test")
+    client._queue.put(event)
+
+    # First flush: attempt 1 fails, re-queues
+    client.flush()
+    assert client._queue.qsize() == 1
+
+    # Second flush: attempt 2 fails, drops events
+    client.flush()
+    assert client._queue.qsize() == 0
+
+    client.close()
+
+
+# --- AsyncTruseraClient tests ---
+
+
+@pytest.mark.asyncio
+async def test_async_client_initialization(mock_httpx_client):
+    """Test AsyncTruseraClient initialization."""
+    client = AsyncTruseraClient(
+        api_key="tsk_test_key",
+        base_url="https://api.test.trusera.dev",
+    )
+
+    assert client.api_key == "tsk_test_key"
+    assert client.base_url == "https://api.test.trusera.dev"
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_async_client_requires_api_key(mock_httpx_client):
+    """Test that async client raises ValueError without API key."""
+    with pytest.raises(ValueError, match="API key is required"):
+        AsyncTruseraClient()
+
+
+@pytest.mark.asyncio
+async def test_async_client_env_var_fallback(mock_httpx_client, monkeypatch):
+    """Test env var fallback for async client."""
+    monkeypatch.setenv("TRUSERA_API_KEY", "tsk_async_env")
+
+    client = AsyncTruseraClient()
+    assert client.api_key == "tsk_async_env"
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_async_client_track_and_flush(mock_httpx_client):
+    """Test async client event tracking and flushing."""
+    client = AsyncTruseraClient(api_key="tsk_test_key")
+    client.set_agent_id("agent_async_123")
+
+    event = Event(type=EventType.TOOL_CALL, name="async_test")
+    client.track(event)
+
+    assert len(client._events) == 1
+
+    await client.flush()
+
+    assert len(client._events) == 0
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_async_client_context_manager(mock_httpx_client):
+    """Test async client as context manager."""
+    async with AsyncTruseraClient(api_key="tsk_test_key") as client:
+        client.set_agent_id("agent_test")
+        client.track(Event(type=EventType.TOOL_CALL, name="test"))
+
+    assert client._closed is True
+
+
+@pytest.mark.asyncio
+async def test_async_client_track_after_close(mock_httpx_client, caplog):
+    """Test that async client rejects events after close."""
+    client = AsyncTruseraClient(api_key="tsk_test_key")
+    await client.close()
+
+    client.track(Event(type=EventType.TOOL_CALL, name="test"))
+    assert "closed" in caplog.text.lower()
