@@ -52,6 +52,34 @@ def test_llm_start_end(trusera_client):
 
 
 @pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="langchain-core not installed")
+def test_llm_error(trusera_client):
+    """Test LLM error tracking."""
+    handler = TruseraCallbackHandler(trusera_client)
+    run_id = uuid4()
+
+    # Simulate LLM start
+    handler.on_llm_start(
+        serialized={"name": "gpt-4"},
+        prompts=["test prompt"],
+        run_id=run_id,
+    )
+
+    # Simulate LLM error
+    error = RuntimeError("API rate limit exceeded")
+    handler.on_llm_error(error=error, run_id=run_id)
+
+    # Check event
+    assert trusera_client._queue.qsize() == 1
+    event = trusera_client._queue.get()
+
+    assert event.type == EventType.LLM_INVOKE
+    assert event.name == "llm_gpt-4"
+    assert event.payload["error"]["type"] == "RuntimeError"
+    assert event.payload["error"]["message"] == "API rate limit exceeded"
+    assert event.metadata["success"] is False
+
+
+@pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="langchain-core not installed")
 def test_tool_start_end(trusera_client):
     """Test tool call tracking."""
     handler = TruseraCallbackHandler(trusera_client)
@@ -137,6 +165,38 @@ def test_chain_start_end(trusera_client):
 
 
 @pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="langchain-core not installed")
+def test_retriever_start_end(trusera_client):
+    """Test retriever tracking for RAG chains."""
+    handler = TruseraCallbackHandler(trusera_client)
+    run_id = uuid4()
+
+    # Simulate retriever start
+    handler.on_retriever_start(
+        serialized={"name": "vector_store"},
+        query="What is AI security?",
+        run_id=run_id,
+    )
+
+    # Mock documents
+    doc = Mock()
+    doc.page_content = "AI security involves protecting AI systems."
+    doc.metadata = {"source": "wiki"}
+
+    handler.on_retriever_end(documents=[doc], run_id=run_id)
+
+    # Check event
+    assert trusera_client._queue.qsize() == 1
+    event = trusera_client._queue.get()
+
+    assert event.type == EventType.DATA_ACCESS
+    assert event.name == "retriever_vector_store"
+    assert event.payload["query"] == "What is AI security?"
+    assert event.payload["num_documents"] == 1
+    assert event.payload["documents"][0]["page_content"] == "AI security involves protecting AI systems."
+    assert event.payload["documents"][0]["metadata"] == {"source": "wiki"}
+
+
+@pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="langchain-core not installed")
 def test_multiple_events(trusera_client):
     """Test tracking multiple events."""
     handler = TruseraCallbackHandler(trusera_client)
@@ -156,3 +216,22 @@ def test_multiple_events(trusera_client):
 
     # Should have 2 events
     assert trusera_client._queue.qsize() == 2
+
+
+@pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="langchain-core not installed")
+def test_metadata_ttl_cleanup(trusera_client):
+    """Test that stale metadata entries are cleaned up."""
+    import time
+    from trusera_sdk.integrations import langchain as lc_mod
+
+    handler = TruseraCallbackHandler(trusera_client)
+
+    # Store an entry and manually age it
+    handler._store_metadata("old_run", {"data": "old"})
+    handler._run_metadata["old_run"]["_stored_at"] = time.monotonic() - (lc_mod._METADATA_TTL_SECONDS + 1)
+
+    # Store a new entry — triggers cleanup
+    handler._store_metadata("new_run", {"data": "new"})
+
+    assert "old_run" not in handler._run_metadata
+    assert "new_run" in handler._run_metadata
