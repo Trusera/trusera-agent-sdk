@@ -189,7 +189,8 @@ client = TruseraClient(
     base_url="https://api.trusera.dev",  # Optional, defaults to production
     flush_interval=5.0,                    # Seconds between auto-flushes
     batch_size=100,                        # Events per batch
-    timeout=10.0                           # HTTP request timeout
+    timeout=10.0,                          # HTTP request timeout
+    max_retries=3                          # Retries before dropping events
 )
 ```
 
@@ -202,6 +203,25 @@ with TruseraClient(api_key="tsk_your_api_key") as client:
     client.register_agent("my-agent", "custom")
     # ... track events ...
 # Automatically flushed and closed
+```
+
+### Async Client
+
+For asyncio applications, use `AsyncTruseraClient`:
+
+```python
+from trusera_sdk import AsyncTruseraClient, Event, EventType
+
+async with AsyncTruseraClient(api_key="tsk_your_api_key") as client:
+    await client.register_agent("my-agent", "custom")
+
+    client.track(Event(
+        type=EventType.TOOL_CALL,
+        name="async_search",
+        payload={"query": "test"}
+    ))
+
+    await client.flush()
 ```
 
 ## Best Practices
