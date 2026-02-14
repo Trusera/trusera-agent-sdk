@@ -345,3 +345,98 @@ async def test_async_client_track_after_close(mock_httpx_client, caplog):
 
     client.track(Event(type=EventType.TOOL_CALL, name="test"))
     assert "closed" in caplog.text.lower()
+
+
+def test_flush_empty_queue(trusera_client, mock_httpx_client):
+    """Test that flush with empty queue is a no-op (no API call)."""
+    initial_call_count = mock_httpx_client.post.call_count
+
+    trusera_client.flush()
+
+    # No new post calls should have been made
+    assert mock_httpx_client.post.call_count == initial_call_count
+
+
+def test_register_agent_http_error(mock_httpx_client):
+    """Test register_agent raises on HTTP error."""
+    import httpx as _httpx
+
+    mock_httpx_client.post.side_effect = _httpx.ConnectError("connection refused")
+
+    client = TruseraClient(api_key="tsk_test_key", flush_interval=60.0)
+
+    with pytest.raises(_httpx.ConnectError):
+        client.register_agent("agent", "langchain")
+
+    client.close()
+
+
+def test_client_default_base_url(mock_httpx_client):
+    """Test that default base URL is used when not provided."""
+    client = TruseraClient(api_key="tsk_test_key")
+
+    assert client.base_url == "https://api.trusera.dev"
+
+    client.close()
+
+
+def test_client_base_url_trailing_slash(mock_httpx_client):
+    """Test that trailing slash is stripped from base URL."""
+    client = TruseraClient(api_key="tsk_test_key", base_url="https://api.test.dev/")
+
+    assert client.base_url == "https://api.test.dev"
+
+    client.close()
+
+
+# --- Additional AsyncTruseraClient tests ---
+
+
+@pytest.mark.asyncio
+async def test_async_flush_without_agent_id(mock_httpx_client, caplog):
+    """Test that async flush warns when no agent ID set."""
+    client = AsyncTruseraClient(api_key="tsk_test_key")
+    client.track(Event(type=EventType.TOOL_CALL, name="test"))
+
+    await client.flush()
+
+    assert "No agent ID set" in caplog.text
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_async_close_idempotent(mock_httpx_client):
+    """Test that async close can be called multiple times safely."""
+    client = AsyncTruseraClient(api_key="tsk_test_key")
+    await client.close()
+    await client.close()  # Should not raise
+
+
+@pytest.mark.asyncio
+async def test_async_register_agent(mock_httpx_client):
+    """Test async register_agent success path."""
+    client = AsyncTruseraClient(api_key="tsk_test_key")
+
+    agent_id = await client.register_agent("test-agent", "crewai")
+
+    assert agent_id == "agent_123"
+    assert client._agent_id == "agent_123"
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_async_flush_batch_size(mock_httpx_client):
+    """Test async flush respects batch_size."""
+    client = AsyncTruseraClient(api_key="tsk_test_key", batch_size=3)
+    client.set_agent_id("agent_test")
+
+    for i in range(5):
+        client.track(Event(type=EventType.TOOL_CALL, name=f"tool_{i}"))
+
+    await client.flush()
+
+    # Should have 2 remaining (5 - batch_size of 3)
+    assert len(client._events) == 2
+
+    await client.close()
