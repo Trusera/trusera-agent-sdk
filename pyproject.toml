@@ -29,7 +29,7 @@ dependencies = ["httpx>=0.24.0"]
 langchain = ["langchain-core>=0.1.0"]
 crewai = ["crewai>=0.1.0"]
 autogen = ["pyautogen>=0.2.0"]
-dev = ["pytest>=7.0", "pytest-asyncio>=0.21", "ruff>=0.1.0", "mypy>=1.0"]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21", "pytest-cov>=4.0", "ruff>=0.1.0", "mypy>=1.0"]
 
 [project.urls]
 Homepage = "https://trusera.dev"

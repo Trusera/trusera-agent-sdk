@@ -28,7 +28,16 @@ jobs:
           pip install -e ".[dev,langchain,crewai,autogen]"
 
       - name: Run tests
-        run: pytest -v --tb=short
+        run: pytest -v --tb=short --cov=trusera_sdk --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          flags: agent-sdk
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
       - name: Run linter
         run: ruff check .

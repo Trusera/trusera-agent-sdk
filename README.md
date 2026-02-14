@@ -3,6 +3,7 @@
 [![PyPI version](https://badge.fury.io/py/trusera-sdk.svg)](https://badge.fury.io/py/trusera-sdk)
 [![Python versions](https://img.shields.io/pypi/pyversions/trusera-sdk.svg)](https://pypi.org/project/trusera-sdk/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![codecov](https://codecov.io/gh/Trusera/trusera-agent-sdk/graph/badge.svg)](https://codecov.io/gh/Trusera/trusera-agent-sdk)
 
 Python SDK for monitoring AI agents with [Trusera](https://trusera.dev). Track LLM invocations, tool calls, data access, and more to ensure your AI agents are secure and compliant.
 
