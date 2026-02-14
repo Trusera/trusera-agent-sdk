@@ -1,10 +1,13 @@
 """Tests for decorator functionality."""
 
-import pytest
 import asyncio
-from unittest.mock import Mock
+from datetime import datetime, timezone
+from enum import Enum
 
-from trusera_sdk import monitor, set_default_client, EventType
+import pytest
+
+from trusera_sdk import EventType, monitor, set_default_client
+from trusera_sdk.decorators import _serialize_value, _MAX_PAYLOAD_SIZE
 
 
 def test_monitor_sync_function(trusera_client):
@@ -196,3 +199,71 @@ def test_monitor_with_complex_types(trusera_client):
     assert result == 6
     event = trusera_client._queue.get()
     assert event.payload["arguments"]["data"]["numbers"] == [1, 2, 3]
+
+
+# --- New tests for extended serialization ---
+
+
+def test_serialize_bytes():
+    """Test _serialize_value handles bytes."""
+    assert _serialize_value(b"hello") == "<bytes len=5>"
+    assert _serialize_value(b"") == "<bytes len=0>"
+
+
+def test_serialize_set():
+    """Test _serialize_value handles sets (sorted list output)."""
+    result = _serialize_value({3, 1, 2})
+    assert result == [1, 2, 3]
+
+
+def test_serialize_datetime():
+    """Test _serialize_value handles datetime and date."""
+    dt = datetime(2026, 2, 14, 12, 0, 0, tzinfo=timezone.utc)
+    assert _serialize_value(dt) == "2026-02-14T12:00:00+00:00"
+
+    from datetime import date
+    d = date(2026, 2, 14)
+    assert _serialize_value(d) == "2026-02-14"
+
+
+def test_serialize_enum():
+    """Test _serialize_value handles Enum types."""
+    class Color(Enum):
+        RED = "red"
+        BLUE = "blue"
+
+    assert _serialize_value(Color.RED) == "red"
+    assert _serialize_value(EventType.TOOL_CALL) == "tool_call"
+
+
+def test_monitor_with_extended_types(trusera_client):
+    """Test @monitor captures bytes, set, datetime, Enum in args."""
+    set_default_client(trusera_client)
+
+    class Status(Enum):
+        ACTIVE = "active"
+
+    @monitor()
+    def process(data: bytes, tags: set, status: Status) -> str:
+        return "ok"
+
+    process(b"binary", {"a", "b"}, Status.ACTIVE)
+
+    event = trusera_client._queue.get()
+    assert event.payload["arguments"]["data"] == "<bytes len=6>"
+    assert sorted(event.payload["arguments"]["tags"]) == ["a", "b"]
+    assert event.payload["arguments"]["status"] == "active"
+
+
+def test_payload_truncation(trusera_client):
+    """Test that oversized payloads are truncated."""
+    set_default_client(trusera_client)
+
+    @monitor()
+    def big_output() -> str:
+        return "x" * (_MAX_PAYLOAD_SIZE + 1000)
+
+    big_output()
+
+    event = trusera_client._queue.get()
+    assert event.payload.get("_truncated") is True or len(str(event.payload)) <= _MAX_PAYLOAD_SIZE + 1000

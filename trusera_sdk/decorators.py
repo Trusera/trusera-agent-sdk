@@ -3,8 +3,11 @@
 import asyncio
 import functools
 import inspect
+import json
 import logging
 import time
+from datetime import date, datetime
+from enum import Enum
 from typing import Any, Callable, Optional, TypeVar, cast
 
 from .client import TruseraClient
@@ -18,8 +21,11 @@ F = TypeVar("F", bound=Callable[..., Any])
 # Global default client
 _default_client: Optional[TruseraClient] = None
 
+# Max payload size in bytes (64 KB). Payloads exceeding this are truncated.
+_MAX_PAYLOAD_SIZE = 65_536
 
-def set_default_client(client: TruseraClient) -> None:
+
+def set_default_client(client: Optional[TruseraClient]) -> None:
     """Set the default client for the @monitor decorator."""
     global _default_client
     _default_client = client
@@ -180,6 +186,9 @@ def _create_and_track_event(
             "message": str(error),
         }
 
+    # Truncate oversized payloads
+    payload = _truncate_payload(payload)
+
     # Metadata
     metadata = {
         "function": func.__name__,
@@ -198,6 +207,26 @@ def _create_and_track_event(
     client.track(event)
 
 
+def _truncate_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Truncate payload if it exceeds _MAX_PAYLOAD_SIZE."""
+    try:
+        serialized = json.dumps(payload, default=str)
+        if len(serialized) <= _MAX_PAYLOAD_SIZE:
+            return payload
+    except (TypeError, ValueError):
+        pass
+
+    # Truncate: keep error/metadata, trim arguments and result
+    truncated = dict(payload)
+    truncated["_truncated"] = True
+    for key in ("arguments", "result"):
+        if key in truncated:
+            val_str = str(truncated[key])
+            if len(val_str) > 1024:
+                truncated[key] = val_str[:1024] + "...[truncated]"
+    return truncated
+
+
 def _serialize_args(args: dict[str, Any]) -> dict[str, Any]:
     """Serialize function arguments for JSON."""
     return {k: _serialize_value(v) for k, v in args.items()}
@@ -207,10 +236,19 @@ def _serialize_value(value: Any) -> Any:
     """
     Serialize a value for JSON.
 
-    Handles common types and falls back to string representation.
+    Handles common Python types: primitives, collections, bytes, sets,
+    datetime, date, and Enum. Falls back to string representation.
     """
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
+    elif isinstance(value, bytes):
+        return f"<bytes len={len(value)}>"
+    elif isinstance(value, set):
+        return sorted(_serialize_value(v) for v in value)
+    elif isinstance(value, (datetime, date)):
+        return value.isoformat()
+    elif isinstance(value, Enum):
+        return value.value
     elif isinstance(value, (list, tuple)):
         return [_serialize_value(v) for v in value]
     elif isinstance(value, dict):
