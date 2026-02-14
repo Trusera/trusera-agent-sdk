@@ -14,155 +14,155 @@ try:
     CREWAI_AVAILABLE = True
 except ImportError:
     CREWAI_AVAILABLE = False
-    logger.warning("crewai not installed, TruseraCrewCallback unavailable")
 
 
-if CREWAI_AVAILABLE:
+class TruseraCrewCallback:
+    """
+    CrewAI callback that sends events to Trusera.
 
-    class TruseraCrewCallback:
+    Captures task execution, agent actions, tool usage, and delegation.
+
+    Example:
+        >>> from crewai import Crew, Agent, Task
+        >>> client = TruseraClient(api_key="tsk_...")
+        >>> client.register_agent("my-crew", "crewai")
+        >>> callback = TruseraCrewCallback(client)
+        >>> crew = Crew(
+        ...     agents=[agent],
+        ...     tasks=[task],
+        ...     step_callback=callback.step_callback
+        ... )
+        >>> crew.kickoff()
+    """
+
+    def __init__(self, client: TruseraClient) -> None:
         """
-        CrewAI callback that sends events to Trusera.
+        Initialize the callback.
 
-        Captures task execution, agent actions, and tool usage.
-
-        Example:
-            >>> from crewai import Crew, Agent, Task
-            >>> client = TruseraClient(api_key="tsk_...")
-            >>> client.register_agent("my-crew", "crewai")
-            >>> callback = TruseraCrewCallback(client)
-            >>> crew = Crew(
-            ...     agents=[agent],
-            ...     tasks=[task],
-            ...     step_callback=callback.step_callback
-            ... )
-            >>> crew.kickoff()
+        Args:
+            client: TruseraClient instance
         """
+        self.client = client
 
-        def __init__(self, client: TruseraClient) -> None:
-            """
-            Initialize the callback.
+    def step_callback(self, step_output: Any) -> None:
+        """
+        Callback for each step in the crew execution.
 
-            Args:
-                client: TruseraClient instance
-            """
-            self.client = client
+        Args:
+            step_output: Output from the step
+        """
+        try:
+            if hasattr(step_output, "task"):
+                self._track_task(step_output)
+            elif hasattr(step_output, "action"):
+                self._track_action(step_output)
+            else:
+                # Generic step tracking
+                event = Event(
+                    type=EventType.DECISION,
+                    name="crew_step",
+                    payload={"output": str(step_output)[:500]},
+                )
+                self.client.track(event)
+        except Exception as e:
+            logger.error(f"Error in TruseraCrewCallback: {e}")
 
-        def step_callback(self, step_output: Any) -> None:
-            """
-            Callback for each step in the crew execution.
+    def _get_task_name(self, task: Any) -> str:
+        """Extract task name, with truncation indicator if needed."""
+        desc = getattr(task, "description", None) or ""
+        if len(desc) > 50:
+            return desc[:50] + "..."
+        return desc or "unknown_task"
 
-            Args:
-                step_output: Output from the step
-            """
-            try:
-                # Extract information from step output
-                if hasattr(step_output, "task"):
-                    self._track_task(step_output)
-                elif hasattr(step_output, "action"):
-                    self._track_action(step_output)
-                else:
-                    # Generic step tracking
-                    event = Event(
-                        type=EventType.DECISION,
-                        name="crew_step",
-                        payload={"output": str(step_output)},
-                    )
-                    self.client.track(event)
-            except Exception as e:
-                logger.error(f"Error in TruseraCrewCallback: {e}")
+    def _get_agent_role(self, agent: Any) -> str:
+        """Safely extract agent role."""
+        return getattr(agent, "role", None) or "unknown_agent"
 
-        def _track_task(self, step_output: Any) -> None:
-            """Track task execution."""
-            task = step_output.task if hasattr(step_output, "task") else None
-            agent = step_output.agent if hasattr(step_output, "agent") else None
+    def _track_task(self, step_output: Any) -> None:
+        """Track task execution."""
+        task = getattr(step_output, "task", None)
+        agent = getattr(step_output, "agent", None)
 
-            task_name = "unknown_task"
-            task_desc = ""
+        task_name = self._get_task_name(task) if task else "unknown_task"
+        task_desc = getattr(task, "description", "") or "" if task else ""
+        agent_role = self._get_agent_role(agent) if agent else "unknown_agent"
+        output = str(getattr(step_output, "output", ""))
 
-            if task and isinstance(task, Task):
-                task_name = task.description[:50] if task.description else "unknown_task"
-                task_desc = task.description or ""
+        event = Event(
+            type=EventType.DECISION,
+            name=f"task_{task_name}",
+            payload={
+                "task_description": task_desc,
+                "output": output[:500],
+            },
+            metadata={
+                "agent_role": agent_role,
+                "task_type": "crew_task",
+            },
+        )
 
-            agent_role = "unknown_agent"
-            if agent and isinstance(agent, Agent):
-                agent_role = agent.role or "unknown_agent"
+        self.client.track(event)
+
+    def _track_action(self, step_output: Any) -> None:
+        """Track agent action."""
+        action = getattr(step_output, "action", None)
+
+        action_name = getattr(action, "tool", "unknown_action") if action else "unknown_action"
+        action_input = getattr(action, "tool_input", {}) if action else {}
+        output = str(getattr(step_output, "output", ""))
+
+        # Detect delegation
+        is_delegation = action_name in ("Delegate work to co-worker", "Ask question to co-worker")
+
+        event_type = EventType.DECISION if is_delegation else EventType.TOOL_CALL
+        metadata: dict[str, Any] = {"action_type": "crew_action"}
+
+        if is_delegation:
+            metadata["is_delegation"] = True
+            # Try to extract co-worker name from input
+            coworker = None
+            if isinstance(action_input, dict):
+                coworker = action_input.get("coworker") or action_input.get("co-worker")
+            elif isinstance(action_input, str) and "coworker" in action_input.lower():
+                coworker = action_input
+            if coworker:
+                metadata["delegated_to"] = str(coworker)
+
+        event = Event(
+            type=event_type,
+            name=action_name,
+            payload={
+                "input": action_input if isinstance(action_input, (dict, str)) else str(action_input),
+                "output": output[:500],
+            },
+            metadata=metadata,
+        )
+
+        self.client.track(event)
+
+    def task_callback(self, task_output: Any) -> None:
+        """
+        Optional callback for task completion.
+
+        Args:
+            task_output: Output from the completed task
+        """
+        try:
+            task = getattr(task_output, "task", None)
+            task_name = self._get_task_name(task) if task else "unknown_task"
+            output = str(getattr(task_output, "output", ""))
 
             event = Event(
                 type=EventType.DECISION,
-                name=f"task_{task_name}",
+                name=f"task_complete_{task_name}",
                 payload={
-                    "task_description": task_desc,
-                    "output": str(step_output.output) if hasattr(step_output, "output") else "",
+                    "output": output[:500],
                 },
                 metadata={
-                    "agent_role": agent_role,
-                    "task_type": "crew_task",
+                    "task_status": "completed",
                 },
             )
 
             self.client.track(event)
-
-        def _track_action(self, step_output: Any) -> None:
-            """Track agent action."""
-            action = step_output.action if hasattr(step_output, "action") else None
-
-            action_name = "unknown_action"
-            action_input = {}
-
-            if action:
-                action_name = getattr(action, "tool", "unknown_action")
-                action_input = getattr(action, "tool_input", {})
-
-            event = Event(
-                type=EventType.TOOL_CALL,
-                name=action_name,
-                payload={
-                    "input": action_input,
-                    "output": str(step_output.output) if hasattr(step_output, "output") else "",
-                },
-                metadata={
-                    "action_type": "crew_action",
-                },
-            )
-
-            self.client.track(event)
-
-        def task_callback(self, task_output: Any) -> None:
-            """
-            Optional callback for task completion.
-
-            Args:
-                task_output: Output from the completed task
-            """
-            try:
-                task_desc = "unknown_task"
-                if hasattr(task_output, "task") and isinstance(task_output.task, Task):
-                    task_desc = task_output.task.description[:50] or "unknown_task"
-
-                event = Event(
-                    type=EventType.DECISION,
-                    name=f"task_complete_{task_desc}",
-                    payload={
-                        "output": (
-                            str(task_output.output) if hasattr(task_output, "output") else ""
-                        ),
-                    },
-                    metadata={
-                        "task_status": "completed",
-                    },
-                )
-
-                self.client.track(event)
-            except Exception as e:
-                logger.error(f"Error in task_callback: {e}")
-
-else:
-
-    class TruseraCrewCallback:  # type: ignore[no-redef]
-        """Placeholder when crewai is not installed."""
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            raise ImportError(
-                "crewai is required for TruseraCrewCallback. "
-                "Install with: pip install trusera-sdk[crewai]"
-            )
+        except Exception as e:
+            logger.error(f"Error in task_callback: {e}")
