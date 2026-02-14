@@ -11,6 +11,13 @@ import httpx
 
 from .events import Event
 
+try:
+    from importlib.metadata import version as _get_version
+
+    _SDK_VERSION = _get_version("trusera-sdk")
+except Exception:
+    _SDK_VERSION = "0.1.1"
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,7 +72,7 @@ class TruseraClient:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
-                "User-Agent": "trusera-sdk-python/0.1.0",
+                "User-Agent": f"trusera-sdk-python/{_SDK_VERSION}",
             },
             timeout=self.timeout,
         )

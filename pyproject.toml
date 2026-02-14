@@ -36,6 +36,9 @@ Homepage = "https://trusera.dev"
 Repository = "https://github.com/Trusera/trusera-agent-sdk"
 Documentation = "https://docs.trusera.dev/sdk/python"
 
+[tool.hatch.build.targets.wheel]
+packages = ["trusera_sdk"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py39"
