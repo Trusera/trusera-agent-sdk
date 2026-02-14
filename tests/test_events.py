@@ -1,7 +1,6 @@
 """Tests for event types and structures."""
 
 import pytest
-from datetime import datetime, timezone
 
 from trusera_sdk import Event, EventType
 
@@ -99,3 +98,46 @@ def test_event_roundtrip():
     assert restored.payload == original.payload
     assert restored.id == original.id
     assert restored.timestamp == original.timestamp
+
+
+def test_event_repr():
+    """Test Event __repr__ for debugging."""
+    event = Event(
+        type=EventType.TOOL_CALL,
+        name="search",
+        id="abc-123",
+        timestamp="2026-01-01T00:00:00+00:00",
+    )
+
+    r = repr(event)
+    assert "tool_call" in r
+    assert "search" in r
+    assert "abc-123" in r
+    assert "2026-01-01" in r
+
+
+def test_event_from_dict_invalid_type():
+    """Test from_dict raises ValueError for invalid event type."""
+    data = {
+        "type": "not_a_real_type",
+        "name": "test",
+    }
+
+    with pytest.raises(ValueError, match="Invalid event type"):
+        Event.from_dict(data)
+
+
+def test_event_from_dict_missing_name():
+    """Test from_dict raises KeyError for missing name."""
+    data = {"type": "tool_call"}
+
+    with pytest.raises(KeyError):
+        Event.from_dict(data)
+
+
+def test_event_from_dict_missing_type():
+    """Test from_dict raises KeyError for missing type."""
+    data = {"name": "test"}
+
+    with pytest.raises(KeyError):
+        Event.from_dict(data)

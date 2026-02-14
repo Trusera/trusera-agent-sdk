@@ -39,6 +39,12 @@ class Event:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+    def __repr__(self) -> str:
+        return (
+            f"Event(type={self.type.value!r}, name={self.name!r}, "
+            f"id={self.id!r}, timestamp={self.timestamp!r})"
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """Convert the event to a dictionary for JSON serialization."""
         return {
@@ -52,9 +58,23 @@ class Event:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Event":
-        """Create an Event from a dictionary."""
+        """Create an Event from a dictionary.
+
+        Raises:
+            ValueError: If the ``type`` field is not a valid EventType.
+            KeyError: If required fields (``type``, ``name``) are missing.
+        """
+        raw_type = data["type"]
+        try:
+            event_type = EventType(raw_type)
+        except ValueError:
+            valid = ", ".join(e.value for e in EventType)
+            raise ValueError(
+                f"Invalid event type {raw_type!r}. Must be one of: {valid}"
+            ) from None
+
         return cls(
-            type=EventType(data["type"]),
+            type=event_type,
             name=data["name"],
             payload=data.get("payload", {}),
             metadata=data.get("metadata", {}),
