@@ -357,7 +357,7 @@ if LANGCHAIN_AVAILABLE:
             )
 
             # Serialize documents safely
-            doc_list = []
+            doc_list: list[dict[str, Any] | str] = []
             if documents:
                 for doc in documents:
                     if hasattr(doc, "page_content"):
