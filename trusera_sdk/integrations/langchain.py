@@ -83,12 +83,15 @@ if LANGCHAIN_AVAILABLE:
             **kwargs: Any,
         ) -> None:
             """Handle LLM start event."""
-            self._store_metadata(str(run_id), {
-                "prompts": prompts,
-                "serialized": serialized,
-                "tags": tags or [],
-                "metadata": metadata or {},
-            })
+            self._store_metadata(
+                str(run_id),
+                {
+                    "prompts": prompts,
+                    "serialized": serialized,
+                    "tags": tags or [],
+                    "metadata": metadata or {},
+                },
+            )
 
         def on_llm_end(
             self,
@@ -182,13 +185,16 @@ if LANGCHAIN_AVAILABLE:
             **kwargs: Any,
         ) -> None:
             """Handle tool start event."""
-            self._store_metadata(str(run_id), {
-                "input_str": input_str,
-                "inputs": inputs or {},
-                "serialized": serialized,
-                "tags": tags or [],
-                "metadata": metadata or {},
-            })
+            self._store_metadata(
+                str(run_id),
+                {
+                    "input_str": input_str,
+                    "inputs": inputs or {},
+                    "serialized": serialized,
+                    "tags": tags or [],
+                    "metadata": metadata or {},
+                },
+            )
 
         def on_tool_end(
             self,
@@ -266,12 +272,15 @@ if LANGCHAIN_AVAILABLE:
             **kwargs: Any,
         ) -> None:
             """Handle chain start event."""
-            self._store_metadata(str(run_id), {
-                "inputs": inputs,
-                "serialized": serialized,
-                "tags": tags or [],
-                "metadata": metadata or {},
-            })
+            self._store_metadata(
+                str(run_id),
+                {
+                    "inputs": inputs,
+                    "serialized": serialized,
+                    "tags": tags or [],
+                    "metadata": metadata or {},
+                },
+            )
 
         def on_chain_end(
             self,
@@ -319,12 +328,15 @@ if LANGCHAIN_AVAILABLE:
             **kwargs: Any,
         ) -> None:
             """Handle retriever start event (RAG chains)."""
-            self._store_metadata(str(run_id), {
-                "query": query,
-                "serialized": serialized,
-                "tags": tags or [],
-                "metadata": metadata or {},
-            })
+            self._store_metadata(
+                str(run_id),
+                {
+                    "query": query,
+                    "serialized": serialized,
+                    "tags": tags or [],
+                    "metadata": metadata or {},
+                },
+            )
 
         def on_retriever_end(
             self,
@@ -349,10 +361,12 @@ if LANGCHAIN_AVAILABLE:
             if documents:
                 for doc in documents:
                     if hasattr(doc, "page_content"):
-                        doc_list.append({
-                            "page_content": doc.page_content[:500],
-                            "metadata": getattr(doc, "metadata", {}),
-                        })
+                        doc_list.append(
+                            {
+                                "page_content": doc.page_content[:500],
+                                "metadata": getattr(doc, "metadata", {}),
+                            }
+                        )
                     else:
                         doc_list.append(str(doc)[:500])
 

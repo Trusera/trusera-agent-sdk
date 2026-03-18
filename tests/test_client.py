@@ -1,12 +1,10 @@
 """Tests for TruseraClient."""
 
-import os
 import time
 
 import pytest
-from unittest.mock import Mock
 
-from trusera_sdk import TruseraClient, AsyncTruseraClient, Event, EventType
+from trusera_sdk import AsyncTruseraClient, Event, EventType, TruseraClient
 
 
 def test_client_initialization(mock_httpx_client):

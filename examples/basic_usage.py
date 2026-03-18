@@ -1,7 +1,8 @@
 """Basic usage example of the Trusera SDK."""
 
 import time
-from trusera_sdk import TruseraClient, Event, EventType, monitor, set_default_client
+
+from trusera_sdk import Event, EventType, TruseraClient
 
 
 def main() -> None:

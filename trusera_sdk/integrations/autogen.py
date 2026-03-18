@@ -160,9 +160,7 @@ class TruseraAutoGenHook:
                     type=EventType.TOOL_CALL,
                     name=func.__name__,
                     payload={
-                        "arguments": _serialize_value(
-                            {"args": args, "kwargs": kwargs}
-                        ),
+                        "arguments": _serialize_value({"args": args, "kwargs": kwargs}),
                         "result": _serialize_value(result),
                     },
                     metadata={
@@ -179,9 +177,7 @@ class TruseraAutoGenHook:
                     type=EventType.TOOL_CALL,
                     name=func.__name__,
                     payload={
-                        "arguments": _serialize_value(
-                            {"args": args, "kwargs": kwargs}
-                        ),
+                        "arguments": _serialize_value({"args": args, "kwargs": kwargs}),
                         "error": {
                             "type": type(e).__name__,
                             "message": str(e),

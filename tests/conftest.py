@@ -1,8 +1,9 @@
 """Shared fixtures for tests."""
 
-import pytest
 from unittest.mock import Mock
+
 import httpx
+import pytest
 
 from trusera_sdk import TruseraClient
 
@@ -34,6 +35,7 @@ def mock_httpx_client(monkeypatch):
         return mock_async_response
 
     mock_async_client.post = mock_async_post
+
     async def mock_aclose():
         pass
 

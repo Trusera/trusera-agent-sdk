@@ -7,7 +7,7 @@ from enum import Enum
 import pytest
 
 from trusera_sdk import EventType, monitor, set_default_client
-from trusera_sdk.decorators import _serialize_value, _MAX_PAYLOAD_SIZE
+from trusera_sdk.decorators import _MAX_PAYLOAD_SIZE, _serialize_value
 
 
 def test_monitor_sync_function(trusera_client):
@@ -121,7 +121,7 @@ def test_monitor_with_exception(trusera_client):
     def failing_function() -> None:
         raise ValueError("Something went wrong")
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Something went wrong"):
         failing_function()
 
     event = trusera_client._queue.get()
@@ -177,6 +177,7 @@ def test_monitor_without_client(caplog):
 
 def test_monitor_preserves_function_metadata():
     """Test that @monitor preserves function metadata."""
+
     @monitor()
     def documented_function(x: int) -> int:
         """This is a docstring."""
@@ -222,12 +223,14 @@ def test_serialize_datetime():
     assert _serialize_value(dt) == "2026-02-14T12:00:00+00:00"
 
     from datetime import date
+
     d = date(2026, 2, 14)
     assert _serialize_value(d) == "2026-02-14"
 
 
 def test_serialize_enum():
     """Test _serialize_value handles Enum types."""
+
     class Color(Enum):
         RED = "red"
         BLUE = "blue"
@@ -266,4 +269,7 @@ def test_payload_truncation(trusera_client):
     big_output()
 
     event = trusera_client._queue.get()
-    assert event.payload.get("_truncated") is True or len(str(event.payload)) <= _MAX_PAYLOAD_SIZE + 1000
+    assert (
+        event.payload.get("_truncated") is True
+        or len(str(event.payload)) <= _MAX_PAYLOAD_SIZE + 1000
+    )

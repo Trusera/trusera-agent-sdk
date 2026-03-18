@@ -1,7 +1,7 @@
 """CrewAI integration for Trusera."""
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from ..client import TruseraClient
 from ..events import Event, EventType
@@ -9,7 +9,7 @@ from ..events import Event, EventType
 logger = logging.getLogger(__name__)
 
 try:
-    from crewai import Agent, Task
+    from crewai import Agent, Task  # noqa: F401
 
     CREWAI_AVAILABLE = True
 except ImportError:
@@ -132,7 +132,9 @@ class TruseraCrewCallback:
             type=event_type,
             name=action_name,
             payload={
-                "input": action_input if isinstance(action_input, (dict, str)) else str(action_input),
+                "input": action_input
+                if isinstance(action_input, (dict, str))
+                else str(action_input),
                 "output": output[:500],
             },
             metadata=metadata,

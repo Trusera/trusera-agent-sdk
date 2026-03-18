@@ -70,9 +70,7 @@ class TruseraClient:
         resolved_url = base_url or os.environ.get("TRUSERA_API_URL", "https://api.trusera.dev")
 
         if not resolved_key:
-            raise ValueError(
-                "API key is required. Pass api_key= or set TRUSERA_API_KEY env var."
-            )
+            raise ValueError("API key is required. Pass api_key= or set TRUSERA_API_KEY env var.")
 
         if not resolved_key.startswith("tsk_"):
             logger.warning("API key should start with 'tsk_' prefix")
@@ -304,9 +302,7 @@ class AsyncTruseraClient:
         resolved_url = base_url or os.environ.get("TRUSERA_API_URL", "https://api.trusera.dev")
 
         if not resolved_key:
-            raise ValueError(
-                "API key is required. Pass api_key= or set TRUSERA_API_KEY env var."
-            )
+            raise ValueError("API key is required. Pass api_key= or set TRUSERA_API_KEY env var.")
 
         if not resolved_key.startswith("tsk_"):
             logger.warning("API key should start with 'tsk_' prefix")
@@ -360,9 +356,7 @@ class AsyncTruseraClient:
         }
 
         try:
-            response = await self._client.post(
-                f"{self.base_url}/api/v1/agents", json=payload
-            )
+            response = await self._client.post(f"{self.base_url}/api/v1/agents", json=payload)
             response.raise_for_status()
             data = response.json()
             agent_id = data["id"]

@@ -69,9 +69,7 @@ class Event:
             event_type = EventType(raw_type)
         except ValueError:
             valid = ", ".join(e.value for e in EventType)
-            raise ValueError(
-                f"Invalid event type {raw_type!r}. Must be one of: {valid}"
-            ) from None
+            raise ValueError(f"Invalid event type {raw_type!r}. Must be one of: {valid}") from None
 
         return cls(
             type=event_type,

@@ -1,14 +1,16 @@
 """Tests for LangChain integration."""
 
-import pytest
 from unittest.mock import Mock
 from uuid import uuid4
+
+import pytest
 
 from trusera_sdk import EventType
 
 try:
+    from langchain_core.outputs import Generation, LLMResult
+
     from trusera_sdk.integrations.langchain import TruseraCallbackHandler
-    from langchain_core.outputs import LLMResult, Generation
 
     LANGCHAIN_AVAILABLE = True
 except ImportError:
@@ -192,7 +194,10 @@ def test_retriever_start_end(trusera_client):
     assert event.name == "retriever_vector_store"
     assert event.payload["query"] == "What is AI security?"
     assert event.payload["num_documents"] == 1
-    assert event.payload["documents"][0]["page_content"] == "AI security involves protecting AI systems."
+    assert (
+        event.payload["documents"][0]["page_content"]
+        == "AI security involves protecting AI systems."
+    )
     assert event.payload["documents"][0]["metadata"] == {"source": "wiki"}
 
 
@@ -222,13 +227,16 @@ def test_multiple_events(trusera_client):
 def test_metadata_ttl_cleanup(trusera_client):
     """Test that stale metadata entries are cleaned up."""
     import time
+
     from trusera_sdk.integrations import langchain as lc_mod
 
     handler = TruseraCallbackHandler(trusera_client)
 
     # Store an entry and manually age it
     handler._store_metadata("old_run", {"data": "old"})
-    handler._run_metadata["old_run"]["_stored_at"] = time.monotonic() - (lc_mod._METADATA_TTL_SECONDS + 1)
+    handler._run_metadata["old_run"]["_stored_at"] = time.monotonic() - (
+        lc_mod._METADATA_TTL_SECONDS + 1
+    )
 
     # Store a new entry — triggers cleanup
     handler._store_metadata("new_run", {"data": "new"})

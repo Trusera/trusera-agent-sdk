@@ -223,9 +223,7 @@ def test_setup_agent_with_hooks(trusera_client):
 
     hook.setup_agent(agent)
 
-    agent.register_hook.assert_called_once_with(
-        "process_message_before_send", hook.message_hook
-    )
+    agent.register_hook.assert_called_once_with("process_message_before_send", hook.message_hook)
 
 
 def test_setup_agent_without_hooks(trusera_client, caplog):
