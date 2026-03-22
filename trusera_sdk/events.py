@@ -16,6 +16,8 @@ class EventType(str, Enum):
     API_CALL = "api_call"
     FILE_WRITE = "file_write"
     DECISION = "decision"
+    INTERCEPTION = "interception"
+    POLICY_VIOLATION = "policy_violation"
 
 
 @dataclass
