@@ -9,7 +9,7 @@ from ..events import Event, EventType
 logger = logging.getLogger(__name__)
 
 try:
-    from crewai import Agent, Task  # noqa: F401
+    from crewai import Agent, Task  # type: ignore[import-not-found]  # noqa: F401
 
     CREWAI_AVAILABLE = True
 except ImportError:

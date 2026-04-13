@@ -5,7 +5,6 @@ import hashlib
 import logging
 import os
 import threading
-import time
 from queue import Empty, Queue
 from typing import Any, Callable, Optional
 
@@ -53,8 +52,8 @@ class TruseraClient:
         batch_size: int = 100,
         timeout: float = 10.0,
         max_retries: int = _MAX_FLUSH_RETRIES,
-        on_flush_error: Optional[Callable[[Exception, list], None]] = None,
-        middleware: Optional[list[Callable]] = None,
+        on_flush_error: Optional[Callable[[Exception, list[Any]], None]] = None,
+        middleware: Optional[list[Callable[..., Any]]] = None,
     ) -> None:
         """
         Initialize the Trusera client.
@@ -148,7 +147,7 @@ class TruseraClient:
             response = self._client.post(f"{self.base_url}/api/v1/agents/register", json=payload)
             response.raise_for_status()
             data = response.json()
-            agent_id: str = data["agent"]["id"]
+            agent_id: str = data["id"]
             self.set_agent_id(agent_id)
             logger.info(f"Registered agent '{name}' with ID: {agent_id}")
             return agent_id
@@ -266,7 +265,9 @@ class TruseraClient:
     def _flush_loop(self) -> None:
         """Background thread that periodically flushes events."""
         while not self._shutdown.is_set():
-            time.sleep(self.flush_interval)
+            # Use wait() instead of sleep() so shutdown signals wake the thread
+            # immediately rather than blocking for the full flush_interval.
+            self._shutdown.wait(timeout=self.flush_interval)
             if not self._shutdown.is_set():
                 self.flush()
 
@@ -282,9 +283,10 @@ class TruseraClient:
         logger.info("Closing Trusera client...")
         self._shutdown.set()
 
-        # Wait for flush thread to exit
+        # Wait for flush thread to exit (thread uses _shutdown.wait so it wakes
+        # up immediately on set(); 2 s is a generous upper bound).
         if self._flush_thread.is_alive():
-            self._flush_thread.join(timeout=self.flush_interval + 1)
+            self._flush_thread.join(timeout=2.0)
 
         # Final flush
         self.flush()
@@ -397,7 +399,7 @@ class AsyncTruseraClient:
             response = await self._client.post(f"{self.base_url}/api/v1/agents/register", json=payload)
             response.raise_for_status()
             data = response.json()
-            agent_id: str = data["agent"]["id"]
+            agent_id: str = data["id"]
             self.set_agent_id(agent_id)
             logger.info(f"Registered agent '{name}' with ID: {agent_id}")
             return agent_id

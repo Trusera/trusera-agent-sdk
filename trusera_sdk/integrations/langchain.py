@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 _METADATA_TTL_SECONDS = 300  # 5 minutes
 
 try:
-    from langchain_core.callbacks import BaseCallbackHandler
-    from langchain_core.outputs import LLMResult
+    from langchain_core.callbacks import BaseCallbackHandler  # type: ignore[import-not-found]
+    from langchain_core.outputs import LLMResult  # type: ignore[import-not-found]
 
     LANGCHAIN_AVAILABLE = True
 except ImportError:
@@ -25,7 +25,7 @@ except ImportError:
 
 if LANGCHAIN_AVAILABLE:
 
-    class TruseraCallbackHandler(BaseCallbackHandler):
+    class TruseraCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]
         """
         LangChain callback handler that sends events to Trusera.
 
